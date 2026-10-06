@@ -1,0 +1,32 @@
+# dynamic arguments for portability
+sample:
+  accession: "SRR25083113"
+  reference_name: "ecoli_k12"
+  reference_url: "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/005/845/GCF_000005845.2_ASM584v2/GCF_000005845.2_ASM584v2_genomic.fna.gz"
+
+  # manual override: skips ena portal api lookup when both urls present, use when ena api
+  # down or accession metadata record broken. leave commented out for auto ena lookup
+  fastq_url_r1: "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR250/013/SRR25083113/SRR25083113_1.fastq.gz"
+  fastq_url_r2: "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR250/013/SRR25083113/SRR25083113_2.fastq.gz"
+
+  # optional checksums for above, verified after download if provided
+  # left blank here since ena's api (the normal checksum source) is down;
+  # retrieve from ena or skip verification by leaving blank
+  fastq_md5_r1: ""
+  fastq_md5_r2: ""
+
+trimming:
+  adapter_type: "TruSeq3-PE"
+  adapter_url: "https://raw.githubusercontent.com/usadellab/Trimmomatic/main/adapters/TruSeq3-PE.fa"
+
+decontamination:
+  # bbduk built-in reference keyword
+  # examples: phix, lambda, adapters, artifacts
+  spike_ins: "phix"
+
+alignment:
+  # Assign platform (PL) and unit/flowcell (PU) globally
+  read_group_template: "@RG\\tID:{sample}\\tPL:illumina\\tPU:unit1\\tSM:{sample}"
+
+# set to local specs
+threads: 10

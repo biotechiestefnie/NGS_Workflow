@@ -1,0 +1,929 @@
+# NGS Workflow: Automated, Scalable, Reproducible, and Portable Sequence Quality Control & Alignment Workflow
+
+author: Stefanie Moreno
+date: October 5, 2026
+
+## Overview:
+
+NGS Workflow is a reproducible, stage-driven next-generation sequencing (NGS) pipeline 
+designed for automated retrieval, preprocessing, quality control assessment, contamination 
+removal, alignment, indexing, statistics calculation, and reporting of paired-end runs.
+
+The project combines:
+
+* Bash for orchestration and resource management
+* Python for configuration validation and stage resolution
+* Snakemake for standardized workflow management and dependency tracking
+* Conda for environment management
+* Industry-standard bioinformatics tools for integrated QC metrics and alignment statistics
+* Rigorous Python testing suite covering configuration validation, stage resolution, 
+  resource requirements, error handling, and shell-safe variable generation
+* Extensive dependencies file allowing for further workflow expansion
+* Consolidation of actionable insights into a single dashboard deliverable
+* Full parameterization allowing use with additional sequencing runs/reference genomes/adapters
+* Multicore thread specification for non-limited tools
+* Cross-platform compatibility 
+* Strict Git version control
+* Comprehensive logging and benchmarks written to separate dedicated files
+* Configuration-driven resource retrieval with automated retry and recovery logic
+* Full workflow execution or stage specification
+
+The pipeline automatically:
+
+* Retrieves paired-end sequencing reads from ENA or user-specified URLs
+* Verifies download integrity through MD5 checksums
+* Performs baseline and post-processing quality control assessments for comparison
+* Removes specified adapters and contaminant sequences
+* Aligns cleaned reads to a reference genome
+* Removes PCR duplicates
+* Indexes the deduplicated alignment BAM for downstream access and analysis
+* Generates overview and comprehensive alignment statistics
+* Produces a stage-specific or full-workflow MultiQC dashboard deliverable
+* Reports status updates throughout execution to the terminal
+* Tracks workflow runtime sans file retrieval/checks, reference indexing, and dry run
+* Avoids file retrieval if already present within project, saving time and memory space
+
+
+## Objective:
+
+The primary goal of this project was to create a robust, portable, and innovative program 
+that provides a comprehensive analysis of an NGS paired-end run, including baseline and 
+post-processing quality control assessments to evaluate the benefits of trimming, 
+decontamination, and deduplication. The quality control assessment stage of the program
+is also accompanied by the alignment stage, in which the processed reads are aligned to
+the reference genome, pcr duplicates are removed, and the resulting alignment is indexed.
+EAch stage can be run individually or the entire workflow can be run at once, with all
+executions requiring a single command. All workflow executions output a multiqc dashboard 
+deliverable that consolidates the results from all steps in the specified execution into 
+a unified and detailed visual summarization.
+
+The workflow was designed around automation, modularity, validation, reproducibility, 
+and future extensibility. For example:
+
+**Automation**
+
+This program is engineered to reduce manual downloading and handling of sequencing datasets,
+as well as the reference genome and processing resources. The forward and reverse read 
+files, reference genome, and the adapters to be trimmed during processing are all 
+parameterized such that the user defines them by accession identifier and website urls in
+the configuration file. The bash script performs checks to ensure each file is not already 
+present inside the project directory before committing to retrieval, avoiding a waste of 
+time and space, which becomes particularly useful as the genome size increases.
+
+The bash script also auto-executes the indexing of the reference genome and performs a
+dry run to confirm the validity of the project file and folder structuring prior to
+the implementation run so there are no unexpected crashes due to structure inconsistencies
+or missing requirements. It automatically tracks the runtime upon initiating execution of
+the workflow, then updates the user upon pipeline completion with the total runtime and
+location of the deliverables associated with the chosen workflow stage(s).
+
+**Modularity**
+
+The workflow was built around a stage-driven execution model that separates orchestration,
+validation, resource provisioning, and workflow execution into independent components.
+
+The Bash launcher manages environment validation, resource retrieval, checksum verification
+, and stage execution. Configuration validation and stage resolution are handled 
+independently through the Python stage registry, while workflow execution is delegated 
+entirely to Snakemake. This separation of concerns allows components to be tested, 
+modified, and expanded independently without requiring extensive changes elsewhere in the 
+project.
+
+The pipeline also supports targeted execution through stage-specific workflow targets. 
+Users may execute only the quality-control workflow, only the alignment workflow, or the 
+complete workflow while preserving dependency tracking and reproducibility.
+
+The architecture was specifically designed to support future analytical modules such as:
+
+* Variant Calling
+* Assembly
+* Annotation
+* Coverage Analysis
+* AMR Detection
+* Taxonomic Classification
+
+without requiring extensive changes to the underlying execution framework.
+
+
+**Validation**
+
+Extensive validation is performed before workflow execution begins to prevent resource 
+waste and unexpected runtime failures.
+
+The Bash launcher validates:
+
+* Correct Conda environment activation
+* Configuration file existence
+* Download success
+* File integrity through MD5 checksum verification
+
+The Python stage registry independently validates:
+
+* Stage names
+* Stage implementation status
+* Required configuration parameters
+* Resource requirements for selected stages
+* YAML syntax and readability
+
+Invalid workflow requests are intercepted before Snakemake execution begins, allowing 
+clear user-facing error messages to be reported without generating confusing stack traces 
+or partial workflow outputs.
+
+To further improve reliability, the workflow performs a Snakemake dry run before execution,
+ensuring that all dependencies, file paths, and workflow targets can be successfully 
+resolved.
+
+**Reproducibility**
+
+Reproducibility was a primary design goal throughout development.
+
+All workflow behavior is driven through a centralized configuration file, allowing new 
+sequencing runs, reference genomes, adapters, contaminants, and computational resources 
+to be defined without modifying workflow code. Workflow execution is managed through 
+Snakemake, which tracks file dependencies, execution order, and file generation history.
+
+The project environment is fully defined through a Conda environment specification file, 
+ensuring tool versions and software dependencies remain consistent between users and 
+computing environments.
+
+Comprehensive runtime logging and benchmark generation provide additional transparency 
+by documenting tool execution, resource utilization, and performance characteristics for 
+every workflow step.
+
+Together, configuration-driven execution, environment standardization, dependency 
+management, logging, benchmarking, and version control ensure analyses can be reproduced 
+consistently across systems and over time.
+
+**Extensibility**
+
+Future expansion was considered during initial project design rather than added as an 
+afterthought.
+
+The centralized stage registry provides a single location where execution stages, 
+required parameters, resource requirements, and Snakemake targets are defined. New 
+workflow modules can therefore be integrated by extending the stage registry and 
+implementing corresponding Snakemake rules without redesigning existing infrastructure.
+
+Workflow staging currently supports:
+
+* QC
+* Alignment
+* Complete Workflow Execution
+
+while placeholders already exist for:
+
+* Variant Calling
+* Assembly
+* Annotation
+* Coverage Analysis
+* AMR Detection
+* Taxonomic Classification
+
+The dashboard architecture was likewise extended to support stage-specific deliverables. 
+Quality-control workflows, alignment workflows, and complete workflow executions each 
+generate dedicated reporting outputs, allowing future modules to contribute their own 
+stage-specific dashboards while remaining compatible with consolidated end-to-end 
+reporting.
+
+
+
+Additional processing steps that will be included as expansions include:
+
+* coordinate sorting 
+* fixing mate information
+* hard filtering
+
+The gradual expansion of this program will also include the following downstream analyses:
+
+
+
+Automation
+
+Reduce manual handling of sequencing datasets and reference resources.
+
+Reproducibility
+
+Ensure identical analyses can be reproduced through configuration-driven execution.
+
+Robustness
+
+Handle:
+
+download failures
+corrupted files
+invalid configurations
+missing resources
+
+before workflow execution begins.
+
+Extensibility
+
+Support future workflow expansion through a centralized stage registry architecture.
+
+Planned future modules include:
+
+Variant Calling
+Assembly
+Annotation
+Coverage Analysis
+Antimicrobial Resistance (AMR)
+Taxonomic Classification
+
+## Workflow Architecture
+
+```text
+
+
+
+```
+
+## File Responsibilities
+
+run_pipeline.sh
+
+Responsibilities:
+
+Argument parsing
+Environment validation
+Resource provisioning
+Download management
+Checksum verification
+Stage execution
+
+stage_registry.py
+
+Responsibilities:
+
+Stage validation
+Configuration validation
+Resource requirement resolution
+Snakemake target selection
+Snakefile
+
+Responsibilities:
+
+Dependency graph creation
+Rule execution
+Tool orchestration
+
+
+## Directory Structure
+
+```text 
+NGS_Workflow/
+|
+├── config/
+│ └── config.yaml
+|
+├── envs/
+│ └── env.yaml
+|
+├── scripts/
+│ ├── run_pipeline.sh
+│ ├── stage_registry.py
+│ └── test_stage_registry.py
+|
+├── raw/
+│
+├── resources/
+│ ├── reference/
+│ └── adapters/
+|
+├── results/
+│ ├── alignment/
+│ ├── deliverables/
+│ ├── fastqc/
+│ │ ├── baseline/
+│ │ └── postqc/
+│ ├── multiqc/
+│ ├── processed/
+│ └── trimmed/
+|
+├── logs/
+|
+├── benchmarks/
+|
+└── Snakefile
+```
+
+
+## Stage-Based Execution Model
+
+Rather than exposing every Snakemake rule directly, the project exposes workflow stages.
+
+**QC Stage**
+
+```Shell
+./scripts/run_pipeline.sh --stage qc
+```
+
+Performs:
+
+
+Baseline FastQC
+↓
+Adapter Trimming
+↓
+Decontamination
+↓
+Post-QC FastQC
+
+
+Reference genome not required.
+
+**Alignment Stage**
+
+```Shell
+./scripts/run_pipeline.sh --stage align
+```
+
+Performs:
+
+QC Workflow
+↓
+BWA Alignment
+↓
+Duplicate Removal
+↓
+BAM Indexing
+↓
+Flagstat
+↓
+Alignment Statistics
+
+Reference genome required.
+
+
+**Full Pipeline**
+
+```Shell
+./scripts/run_pipeline.sh
+````
+
+or
+
+```Shell
+./scripts/run_pipeline.sh --stage all
+```
+
+Performs:
+
+QC Workflow
+↓
+Alignment Workflow
+↓
+MultiQC Dashboard
+
+Workflow Structure
+
+raw FASTQ
+|
+v
+baseline_fastqc
+|
+v
+trim
+|
+v
+decon
+|
+v
+processed_fastqc
+|
+v
+bwa_align
+|
+v
+dedup
+|
+v
+index_bam
+|
++-------> flagstat
+|
++-------> stats
+|
+v
+multiqc_dashboard
+
+## Tool Documentation
+
+1. FastQC:
+
+*Background*
+
+FastQC is a sequencing quality assessment tool developed specifically for high-throughput 
+sequencing datasets.
+
+Purpose
+
+Evaluate:
+
+per-base quality
+GC content
+duplication levels
+overrepresented sequences
+adapter contamination
+Application in Project
+
+Used twice:
+
+Before preprocessing
+After preprocessing
+
+This allows direct comparison of sequencing quality improvements.
+
+Trimmomatic
+Background
+
+Trimmomatic is a read trimming tool for Illumina sequencing data.
+
+Purpose
+
+Remove:
+
+adapter sequences
+low-quality bases
+short reads
+Application in Project
+
+Used during preprocessing to improve downstream alignment quality.
+
+BBDuk
+Background
+
+BBDuk is part of the BBTools suite.
+
+Purpose
+
+Filter reads by matching them against contaminant reference sequences.
+
+Application in Project
+
+Removes user-specified contaminant sequences such as:
+
+PhiX
+spike-in controls
+synthetic constructs
+
+before alignment.
+
+BWA
+Background
+
+Burrows-Wheeler Aligner (BWA) is one of the most commonly used reference alignment tools.
+
+Purpose
+
+Align sequencing reads to a reference genome.
+
+Application in Project
+
+Uses:
+
+Shell
+bwa mem
+Show more lines
+
+to align processed paired-end reads.
+
+Samtools
+Background
+
+Samtools is the standard toolkit for SAM/BAM manipulation.
+
+Purpose
+
+Perform:
+
+format conversion
+sorting
+duplicate marking
+indexing
+statistics generation
+Application in Project
+
+Used for:
+
+Plain Text
+BAM conversion
+Sorting
+Fixmate
+Markdup
+Indexing
+Flagstat
+Alignment statistics
+Show more lines
+MultiQC
+Background
+
+MultiQC combines outputs from multiple bioinformatics tools into a single report.
+
+Purpose
+
+Provide centralized QC reporting.
+
+Application in Project
+
+Aggregates:
+
+FastQC reports
+duplication metrics
+alignment metrics
+flagstat results
+samtools statistics
+
+into a single dashboard.
+
+Snakemake
+Background
+
+Snakemake is a workflow management system for reproducible computational pipelines.
+
+Purpose
+
+Build dependency graphs and manage execution order.
+
+Application in Project
+
+Controls:
+
+rule execution
+dependency resolution
+workflow reproducibility
+Configuration File
+
+Pipeline behavior is driven by:
+
+config/config.yaml
+
+
+Example:
+
+YAML
+sample:
+accession: "SRR123456"
+reference_name: "ecoli_k12"
+reference_url: "https://example.org/ref.fa.gz"
+
+trimming:
+adapter_type: "TruSeq3-PE"
+adapter_url: "https://example.org/adapters.fa"
+
+contamination:
+spike_ins: "resources/contaminants/phix.fa"
+
+threads: 8
+
+
+Environment Setup
+
+Environment specification:
+
+Plain Text
+envs/env.yaml
+Show more lines
+
+Create environment:
+
+Shell
+conda env create -f envs/env.yaml
+Show more lines
+
+Activate environment:
+
+Shell
+conda activate bioinfo
+Show more lines
+
+The launcher validates that the correct environment is active before execution.
+
+Running the Pipeline
+QC Workflow
+Shell
+./scripts/run_pipeline.sh --stage qc
+Show more lines
+Alignment Workflow
+Shell
+./scripts/run_pipeline.sh --stage align
+Show more lines
+Complete Workflow
+Shell
+./scripts/run_pipeline.sh
+Show more lines
+
+or
+
+Shell
+./scripts/run_pipeline.sh --stage all
+Show more lines
+Help Menu
+Shell
+./scripts/run_pipeline.sh --help
+Show more lines
+Outputs
+QC Outputs
+Plain Text
+results/fastqc/
+Show more lines
+
+Contains:
+
+baseline FastQC reports
+post-processing FastQC reports
+Alignment Outputs
+Plain Text
+results/alignment/
+Show more lines
+
+Contains:
+
+BAM files
+BAM indexes
+duplicate metrics
+flagstat reports
+Deliverables
+Plain Text
+results/deliverables/
+Show more lines
+
+Contains:
+
+Plain Text
+sample_stats.txt
+multiqc_dashboard.html
+Show more lines
+Logging
+
+Every major workflow component generates logs.
+
+Location:
+
+Plain Text
+logs/
+Show more lines
+
+Examples:
+
+Plain Text
+baseline_fastqc_SAMPLE.log
+trim_SAMPLE.log
+decon_SAMPLE.log
+alignment_SAMPLE.log
+dedup_SAMPLE.log
+multiqc.log
+Show more lines
+
+Inspect logs:
+
+Shell
+cat logs/alignment_SAMPLE.log
+Show more lines
+
+or
+
+Shell
+less logs/alignment_SAMPLE.log
+Show more lines
+Benchmarking
+
+Runtime data for each rule is recorded in:
+
+Plain Text
+benchmarks/
+Show more lines
+
+Examples:
+
+Plain Text
+baseline_fastqc_SAMPLE.txt
+trim_SAMPLE.txt
+alignment_SAMPLE.txt
+Show more lines
+
+These files can be used for:
+
+performance optimization
+hardware comparisons
+workflow scaling analyses
+Testing
+
+The registry module includes unit tests.
+
+Run tests:
+
+Shell
+pytest scripts/test_stage_registry.py
+Show more lines
+
+Test coverage includes:
+
+stage validation
+parameter validation
+unknown stages
+unimplemented stages
+YAML parsing failures
+resource resolution
+shell-safe variable generation
+Troubleshooting
+Environment Not Activated
+
+Error:
+
+Plain Text
+Please Activate the Required Conda Environment
+Show more lines
+
+Solution:
+
+Shell
+conda activate bioinfo
+Show more lines
+Missing Configuration Parameters
+
+Error:
+
+Plain Text
+MISSING:
+Show more lines
+
+Solution:
+
+Verify required parameters exist in:
+
+Plain Text
+config/config.yaml
+Show more lines
+Unknown Stage
+
+Error:
+
+Plain Text
+UNKNOWN_STAGE
+Show more lines
+
+Solution:
+
+Run:
+
+Shell
+./scripts/run_pipeline.sh --help
+Show more lines
+
+to view available stages.
+
+Download Failures
+
+Downloads automatically retry three times.
+
+If failures persist:
+
+verify internet connectivity
+verify URL validity
+verify ENA availability
+Checksum Failure
+
+Error:
+
+Plain Text
+Checksum Mismatch
+Show more lines
+
+Solution:
+
+Delete corrupted files:
+
+Shell
+rm raw/*.fastq.gz
+Show more lines
+
+and rerun pipeline.
+
+Snakemake Validation Failure
+
+Run:
+
+Shell
+snakemake -n
+Show more lines
+
+to inspect dependency issues without executing the workflow.
+
+Future Expansion Roadmap
+
+The stage registry architecture was built specifically to support future workflow modules.
+
+Planned stages:
+
+Variant Calling
+
+Potential tools:
+
+bcftools
+freebayes
+GATK
+
+Outputs:
+
+VCF files
+filtered variants
+Assembly
+
+Potential tools:
+
+SPAdes
+Flye
+
+Outputs:
+
+assembled contigs
+assembly statistics
+Annotation
+
+Potential tools:
+
+Prokka
+Bakta
+
+Outputs:
+
+annotated genomes
+GFF files
+Coverage Analysis
+
+Potential tools:
+
+mosdepth
+bedtools
+
+Outputs:
+
+coverage summaries
+coverage visualizations
+AMR Detection
+
+Potential tools:
+
+AMRFinderPlus
+Abricate
+
+Outputs:
+
+detected resistance genes
+resistance summaries
+Taxonomic Classification
+
+Potential tools:
+
+Kraken2
+Bracken
+Centrifuge
+
+Outputs:
+
+organism classifications
+abundance reports
+taxonomic visualizations
+Design Principles
+
+This project emphasizes:
+
+reproducibility
+modularity
+configuration-driven execution
+automated resource management
+validation before execution
+workflow transparency
+future extensibility
+
+The stage registry architecture separates validation, orchestration, and workflow 
+execution into independent components, making the pipeline easier to maintain, test, 
+and expand as additional NGS analysis modules are implemented.
+
+
+
+
+
+
+
+
+resolve this script's real directory & project root, independent of
+# wherever the caller's shell happens to be cd'd to. makes config/,
+# scripts/ & every later relative path resolve correctly whether invoked
+# as ./run_pipeline.sh (from inside scripts/), ./scripts/run_pipeline.sh
+# (from project root), or via an absolute/symlinked path
+
+
+
+Deliverables
+
+qc
+ └── qc_dashboard.html
+
+align
+ ├── alignment_dashboard.html
+ └── sample_stats.txt
+
+all
+ ├── multiqc_dashboard.html
+ └── sample_stats.txt
