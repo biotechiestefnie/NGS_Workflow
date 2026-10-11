@@ -3,13 +3,20 @@ configfile: "config/config.yaml"
 
 # project configuration values shared across workflow rules
 sample = config["sample"]["accession"]
-reference_name = config["sample"]["reference_name"]
+reference_name = config["reference"]["name"]
 num_threads = config["threads"]
 adapter_type = config["trimming"]["adapter_type"]
 spike_ins = config["decontamination"]["spike_ins"]
+ploidy = config["variant_calling"]["ploidy"]
+min_base_quality = config["variant_calling"]["min_base_quality"]
+min_map_quality = config["variant_calling"]["min_map_quality"]
+min_variant_quality = config["variant_calling"]["min_variant_quality"]
+min_depth = config["variant_calling"]["min_depth"]
+
+# shared reference path, declared once and reused by every rule
+reference = f"resources/reference/{reference_name}.fa"
 
 # stage target set defining files that indicate each stage success
-
 # aggregate target for quality-control workflow only
 rule qc:
     input:
@@ -21,11 +28,20 @@ rule align:
         f"results/deliverables/alignment_dashboard.html",
         f"results/deliverables/{sample}_stats.txt"
 
+# aggregate target for variant calling stage
+rule variant_calling:
+    input:
+        f"results/variants/{sample}_filtered.vcf.gz.tbi",
+        f"results/variants/{sample}_variant_stats.txt",
+        "results/deliverables/variant_dashboard.html"
+
 # aggregate target representing entire workflow
 rule all:
     input:
         f"results/deliverables/{sample}_stats.txt",
-        f"results/deliverables/multiqc_dashboard.html"
+        f"results/deliverables/multiqc_dashboard.html",
+        f"results/variants/{sample}_filtered.vcf.gz",
+        f"results/variants/{sample}_variant_stats.txt"
 
 # rule 1: baseline fastqc raw seq paired end run files
 rule baseline_fastqc:
@@ -162,15 +178,15 @@ rule qc_dashboard:
            results/deliverables/qc_dashboard.html
         """
 
-# rule 5: align processed reads to indexed reference genome with bwa
+# rule 6: align processed reads to indexed reference genome with bwa
 rule bwa_align:
     input:
         r1=f"results/processed/{sample}_1_decon.fastq.gz",
-        r2=f"results/processed/{sample}_2_decon.fastq.gz"
+        r2=f"results/processed/{sample}_2_decon.fastq.gz",
+        ref=reference
     output:
-        bam=f"results/alignment/{sample}.bam"
+        bam=temp(f"results/alignment/{sample}.bam")
     params:
-        reference_path=f"resources/reference/{reference_name}.fa",
         rg=f"@RG\\tID:{sample}\\tPL:illumina\\tPU:flowcell1\\tSM:{sample}"
     benchmark:
         f"benchmarks/alignment_{sample}.txt"
@@ -184,7 +200,7 @@ rule bwa_align:
             -M \
             -R "{params.rg}" \
             -t {threads} \
-            {params.reference_path} \
+            {input.ref} \
             {input.r1} \
             {input.r2} \
             2> {log} | \
@@ -194,7 +210,7 @@ rule bwa_align:
             > {output.bam}
         """
 
-# rule 6: mark & remove pcr duplicates
+# rule 7: mark & remove pcr duplicates
 rule dedup:
     input:
         bam=f"results/alignment/{sample}.bam"
@@ -208,7 +224,6 @@ rule dedup:
         f"logs/dedup_{sample}.log"
     threads:
         num_threads
-    # remove first alignment file containing pcr dupes
     shell:
         """
         samtools sort \
@@ -228,11 +243,10 @@ rule dedup:
             -f {output.metrics} \
             - \
             {output.bam} \
-            2> {log} && \
-        rm -f {input.bam}
+            2> {log} 
         """
 
-# rule 7: build aligned, deduplicated bam index
+# rule 8: build aligned, deduplicated bam index
 rule index_bam:
     input:
         bam=f"results/alignment/{sample}_dedup.bam"
@@ -243,7 +257,7 @@ rule index_bam:
         samtools index {input.bam}
         """
 
-# rule 8: collect overview mapping quality statistics
+# rule 9: collect overview mapping quality statistics
 rule flagstat:
     input:
         bam=f"results/alignment/{sample}_dedup.bam"
@@ -254,7 +268,7 @@ rule flagstat:
         samtools flagstat {input.bam} > {output}
         """
 
-# rule 9: collect comprehensive alignment statistics
+# rule 10: collect comprehensive alignment statistics
 rule stats:
     input:
         bam=f"results/alignment/{sample}_dedup.bam"
@@ -265,7 +279,7 @@ rule stats:
         samtools stats {input.bam} > {output}
         """
 
-# rule 10-align: aggregate alignment metrics into stage dashboard
+# rule 11-align: aggregate alignment metrics into stage dashboard
 rule alignment_dashboard:
     input:
         f"results/alignment/{sample}_markdup_metrics.txt",
@@ -287,7 +301,7 @@ rule alignment_dashboard:
            results/deliverables/alignment_dashboard.html
         """
 
-# rule 10-all: combine all results into unified dashboard
+# rule 11-all: combine all results into unified dashboard
 rule multiqc_dashboard:
     input:
         # takes results from qc & alignment stage to consolidate
@@ -297,7 +311,8 @@ rule multiqc_dashboard:
         f"results/fastqc/postqc/{sample}_2_decon_fastqc.zip",
         f"results/alignment/{sample}_markdup_metrics.txt",
         f"results/alignment/{sample}_flagstat.txt",
-        f"results/deliverables/{sample}_stats.txt"
+        f"results/deliverables/{sample}_stats.txt",
+        f"results/variants/{sample}_variant_stats.txt"
     output:
         # High-value dashboard asset: in deliverables folder
         html=f"results/deliverables/multiqc_dashboard.html"
@@ -313,4 +328,126 @@ rule multiqc_dashboard:
         # move dashboard to deliverables folder
         mv results/multiqc/multiqc_dashboard.html \
            results/deliverables/multiqc_dashboard.html
+        """
+
+# rule 12: index reference fasta so parallel jobs never race to create it
+rule faidx_reference:
+    input:
+        reference
+    output:
+        f"{reference}.fai"
+    log:
+        f"logs/faidx_{reference_name}.log"
+    shell:
+        "samtools faidx {input} 2> {log}"
+
+# rule 13: call variants with bcftools mpileup + call
+rule variant_call:
+    input:
+        bam=f"results/alignment/{sample}_dedup.bam",
+        bai=f"results/alignment/{sample}_dedup.bam.bai",
+        ref=reference,
+        fai=f"{reference}.fai"
+    output:
+        vcf=f"results/variants/{sample}_raw.vcf.gz"
+    params:
+        ploidy=ploidy,
+        min_bq=min_base_quality,
+        min_mq=min_map_quality
+    benchmark:
+        f"benchmarks/variant_call_{sample}.txt"
+    log:
+        f"logs/variant_call_{sample}.log"
+    threads:
+        num_threads
+    shell:
+        """
+        (
+        bcftools mpileup \
+            --fasta-ref {input.ref} \
+            --min-BQ {params.min_bq} \
+            --min-MQ {params.min_mq} \
+            --annotate FORMAT/AD,FORMAT/DP \
+            --output-type u \
+            --threads {threads} \
+            {input.bam} | \
+        bcftools call \
+            --multiallelic-caller \
+            --variants-only \
+            --ploidy {params.ploidy} \
+            --output-type z \
+            --threads {threads} \
+            --output {output.vcf} 
+        ) > {log} 2>&1  
+        """
+
+# rule 14: index raw vcf
+rule index_vcf:
+    input:
+        vcf=f"results/variants/{sample}_raw.vcf.gz"
+    output:
+        tbi=f"results/variants/{sample}_raw.vcf.gz.tbi"
+    shell:
+        """
+        bcftools index --tbi {input.vcf}
+        """
+
+# rule 15: hard-filter variants by quality and depth
+rule filter_variants:
+    input:
+        vcf=f"results/variants/{sample}_raw.vcf.gz",
+        tbi=f"results/variants/{sample}_raw.vcf.gz.tbi"
+    output:
+        vcf=f"results/variants/{sample}_filtered.vcf.gz"
+    params:
+        min_qual=min_variant_quality,
+        min_dp=min_depth
+    benchmark:
+        f"benchmarks/filter_variants_{sample}.txt"
+    log:
+        f"logs/filter_variants_{sample}.log"
+    shell:
+        """
+        bcftools filter \
+            --include 'QUAL>={params.min_qual} && FORMAT/DP>={params.min_dp}' \
+            --output-type z \
+            {input.vcf} \
+            > {output.vcf} \
+            2> {log} && \
+        bcftools index --tbi {output.vcf}
+        """
+
+# rule 16: generate variant summary statistics
+rule variant_stats:
+    input:
+        vcf=f"results/variants/{sample}_filtered.vcf.gz"
+    output:
+        stats=f"results/variants/{sample}_variant_stats.txt"
+    log:
+        f"logs/variant_stats_{sample}.log"
+    shell:
+        """
+        bcftools stats {input.vcf} \
+            > {output.stats} \
+            2> {log}
+        """
+
+# rule 17-variants: aggregate variant statistics into stage dashboard
+rule variant_dashboard:
+    input:
+        f"results/variants/{sample}_variant_stats.txt"
+    output:
+        html="results/deliverables/variant_dashboard.html"
+    log:
+        "logs/variant_multiqc.log"
+    shell:
+        """
+        multiqc results/variants \
+            -o results/variant_multiqc \
+            -n variant_dashboard.html \
+            --force \
+            > {log} 2>&1
+
+        mv results/variant_multiqc/variant_dashboard.html \
+           results/deliverables/variant_dashboard.html
         """

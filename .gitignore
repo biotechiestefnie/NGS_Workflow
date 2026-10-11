@@ -1,0 +1,24 @@
+# macos and ide files
+.DS_Store
+.idea/
+
+# python caches
+__pycache__/
+.pytest_cache/
+
+# snakemake run metadata
+.snakemake/
+
+# large data and intermediate outputs, regenerate by running pipeline
+raw/
+resources/
+logs/
+benchmarks/
+results/alignment/
+results/alignment_multiqc/
+results/fastqc/
+results/multiqc/
+results/processed/
+results/qc_multiqc/
+results/trimmed/
+results/variant_multiqc/
