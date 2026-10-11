@@ -7,9 +7,10 @@
 # checksums, provision stage-specific dependencies, and execute snakemake workflows through
 # stage targets
 #
-# supported stages: -qc, -align, -all
+# supported stages: qc, align, variant-calling, all
 #
-# future expansion stages: variant calling, assembly, annotation, coverage, amr, and taxonomy
+# future expansion stages: assembly, annotation, coverage, amr, and taxonomy
+
 
 # stop execution on failure or unspecified variables
 # flags: -e exits if command nonzero exit, -u unset vars as errors, -q quit if command fails
@@ -40,14 +41,14 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         -h|--help)
-            echo "Usage: ./run_pipeline.sh [--stage <stage_name>]"
-            echo "Implemented Stages: qc, align, all"
-            echo "Planned Stages: variant-calling, assembly, annotation, coverage, amr, taxonomy"
+            echo "Usage: bash scripts/run_pipeline.sh [--stage <stage_name>]"
+            echo "Implemented Stages: qc, align, variant-calling, all"
+            echo "Planned Stages: assembly, annotation, coverage, amr, taxonomy"
             exit 0
             ;;
         *)
             echo "Error: Unrecognized Argument '$1'."
-            echo "Usage: ./run_pipeline.sh [--stage <stage_name>]"
+            echo "Usage: bash scripts/run_pipeline.sh [--stage <stage_name>]"
             exit 1
             ;;
     esac
@@ -75,8 +76,7 @@ compute_md5() {
 }
 
 # retry wrapper shared by network fetches: 3 attempts, centralize retry so downloads share
-# identical robustness rather than duplicating ad hoc error
-# handling per call site
+# identical robustness rather than duplicating ad hoc error handling per call site
 download_with_retry() {
     local url="$1"
     local dest="$2"
@@ -150,10 +150,10 @@ case "${config_output}" in
         echo "Valid Stages: ${valid_stages//,/, }"
         exit 1
         ;;
-    UNIMPLEMENTED:*)
+        UNIMPLEMENTED:*)
         bad_stage="${config_output#UNIMPLEMENTED:}"
         echo "Error: Stage '${bad_stage}' Is Not Yet Implemented in Snakefile."
-        echo "Currently Available Stages: qc, align, all."
+        echo "Currently Available Stages: qc, align, variant-calling, all."
         exit 1
         ;;
     MISSING:*)
@@ -312,6 +312,10 @@ seconds=$((duration%60))
 echo "Pipeline Completed Successfully for Stage '${stage}'!"
 echo "Total Workflow Runtime: ${minutes}m ${seconds}s"
 
+# point user to results for stages that produce them
 if [ "${stage}" = "all" ]; then
-    echo "MultiQC Dashboard Located in 'deliverables/' Folder"
+    echo "MultiQC Dashboard Located in 'results/deliverables/' Folder"
+fi
+if [ "${stage}" = "all" ] || [ "${stage}" = "variant-calling" ]; then
+    echo "Filtered Variants and Variant Statistics Located in 'results/variants/' Folder"
 fi

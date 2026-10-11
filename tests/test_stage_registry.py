@@ -4,28 +4,37 @@ unit tests for stage_registry.resolve_stage
 covers every branch resolve_stage can return: success, unknown stage,
 unimplemented stage, missing param(s) & invalid yaml. run with:
 
-pytest scripts/test_stage_registry.py
+pytest tests/test_stage_registry.py
 """
 
 import textwrap
 
 import pytest
 
-from scripts.stage_registry import get_nested, resolve_stage
+from stage_registry import get_nested, resolve_stage
 
 
 FULL_CONFIG = """
 sample:
   accession: "test_accession"
-  reference_name: "test_reference"
-  reference_url: "https://example.com/test_reference.fa.gz"
+
+reference:
+  name: "test_reference"
+  url: "https://example.com/test_reference.fa.gz"
 
 trimming:
   adapter_type: "test_adapter"
   adapter_url: "https://example.com/test_adapter.fa"
 
-contamination:
+decontamination:
   spike_ins: "test_contaminant"
+  
+variant_calling:
+  ploidy: 1
+  min_base_quality: 20
+  min_map_quality: 20
+  min_variant_quality: 30
+  min_depth: 10
 
 threads: 1
 """
@@ -38,7 +47,7 @@ trimming:
   adapter_type: "test_adapter"
   adapter_url: "https://example.com/test_adapter.fa"
 
-contamination:
+decontamination:
   spike_ins: "test_contaminant"
 
 threads: 1
@@ -95,8 +104,8 @@ def test_align_stage_requires_reference_params(write_config):
 
     assert len(lines) == 1
     assert lines[0].startswith("MISSING:")
-    assert "sample.reference_name" in lines[0]
-    assert "sample.reference_url" in lines[0]
+    assert "reference.name" in lines[0]
+    assert "reference.url" in lines[0]
 
 # confirm that running entire pipeline requires all params
 def test_all_stage_succeeds_with_full_config(write_config):
@@ -154,3 +163,26 @@ def test_values_are_shell_quoted(write_config):
         adapter_line
         == "adapter_url='https://example.com/test adapter.fa'"
     )
+    
+# confirm variant-calling stage resolves to underscore snakemake target
+def test_variant_calling_stage_succeeds_with_full_config(write_config):
+    config_path = write_config(FULL_CONFIG)
+
+    lines = resolve_stage(config_path, "variant-calling")
+
+    assert "snakemake_target=variant_calling" in lines
+    assert "ploidy=1" in lines
+    assert "need_reference=1" in lines
+
+
+# confirm variant-calling stage fails when variant params are absent
+def test_variant_calling_stage_requires_variant_params(write_config):
+    config_path = write_config(
+        FULL_CONFIG.replace("ploidy: 1", "")
+    )
+
+    lines = resolve_stage(config_path, "variant-calling")
+
+    assert len(lines) == 1
+    assert lines[0].startswith("MISSING:")
+    assert "variant_calling.ploidy" in lines[0]

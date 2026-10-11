@@ -1,8 +1,6 @@
 # dynamic arguments for portability
 sample:
   accession: "SRR25083113"
-  reference_name: "ecoli_k12"
-  reference_url: "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/005/845/GCF_000005845.2_ASM584v2/GCF_000005845.2_ASM584v2_genomic.fna.gz"
 
   # manual override: skips ena portal api lookup when both urls present, use when ena api
   # down or accession metadata record broken. leave commented out for auto ena lookup
@@ -14,6 +12,12 @@ sample:
   # retrieve from ena or skip verification by leaving blank
   fastq_md5_r1: ""
   fastq_md5_r2: ""
+
+reference:
+  # label for files on disk, used in resources/reference/<name>.fa
+  name: "ecoli_o157h7_edl933"
+  # refseq genomic fasta, gzip compressed
+  url: "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/006/665/GCF_000006665.1_ASM666v1/GCF_000006665.1_ASM666v1_genomic.fna.gz"
 
 trimming:
   adapter_type: "TruSeq3-PE"
@@ -27,6 +31,18 @@ decontamination:
 alignment:
   # Assign platform (PL) and unit/flowcell (PU) globally
   read_group_template: "@RG\\tID:{sample}\\tPL:illumina\\tPU:unit1\\tSM:{sample}"
+
+variant_calling:
+  # genome ploidy: 1 for bacteria, haploid calling avoids false heterozygous calls
+  ploidy: 1
+  # minimum base quality for a base to be considered in pileup
+  min_base_quality: 20
+  # minimum mapping quality for a read to be included
+  min_map_quality: 20
+  # hard-filter: minimum variant quality score (QUAL field)
+  min_variant_quality: 30
+  # hard-filter: minimum read depth at a variant site
+  min_depth: 10
 
 # set to local specs
 threads: 10

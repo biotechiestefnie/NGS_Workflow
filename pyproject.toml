@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+# put scripts/ on the import path so tests can import stage_registry directly
+pythonpath = ["scripts"]
+# run only the tests folder
+testpaths = ["tests"]

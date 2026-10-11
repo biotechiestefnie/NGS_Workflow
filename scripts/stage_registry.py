@@ -19,12 +19,17 @@ import yaml
 # dotted yaml path mapped to resulting bash variable name in dict, shared across stages
 PARAM_VAR_MAP = {
     "sample.accession": "sample",
-    "sample.reference_name": "reference_name",
-    "sample.reference_url": "reference_url",
+    "reference.name": "reference_name",
+    "reference.url": "reference_url",
     "trimming.adapter_type": "adapter_type",
     "trimming.adapter_url": "adapter_url",
     "decontamination.spike_ins": "spike_ins",
     "threads": "threads",
+    "variant_calling.ploidy": "ploidy",
+    "variant_calling.min_base_quality": "min_base_quality",
+    "variant_calling.min_map_quality": "min_map_quality",
+    "variant_calling.min_variant_quality": "min_variant_quality",
+    "variant_calling.min_depth": "min_depth",
 }
 
 # manual override for raw read urls/checksums from ena api
@@ -42,7 +47,16 @@ QC_PARAMS = [
     "decontamination.spike_ins",
     "threads",
 ]
-ALIGN_PARAMS = QC_PARAMS + ["sample.reference_name", "sample.reference_url"]
+ALIGN_PARAMS = QC_PARAMS + ["reference.name", "reference.url"]
+
+# params required by any stage that calls variants
+VARIANT_PARAMS = [
+    "variant_calling.ploidy",
+    "variant_calling.min_base_quality",
+    "variant_calling.min_map_quality",
+    "variant_calling.min_variant_quality",
+    "variant_calling.min_depth",
+]
 
 # stage name -> required params, required resource categories & snakemake target
 STAGE_REGISTRY = {
@@ -56,13 +70,17 @@ STAGE_REGISTRY = {
         "params": ALIGN_PARAMS,
         "resources": {"reads": True, "adapters": True, "reference": True, "bwa_index": True},
     },
-    "all": {
+     "all": {
         "target": "all",
-        "params": ALIGN_PARAMS,
+        "params": ALIGN_PARAMS + VARIANT_PARAMS,
+        "resources": {"reads": True, "adapters": True, "reference": True, "bwa_index": True},
+    },
+    "variant-calling": {
+        "target": "variant_calling",
+        "params": ALIGN_PARAMS + VARIANT_PARAMS,
         "resources": {"reads": True, "adapters": True, "reference": True, "bwa_index": True},
     },
     # target none marks stage planned but not built into snakefile
-    "variant-calling": {"target": None, "params": [], "resources": {}},
     "assembly": {"target": None, "params": [], "resources": {}},
     "annotation": {"target": None, "params": [], "resources": {}},
     "coverage": {"target": None, "params": [], "resources": {}},
