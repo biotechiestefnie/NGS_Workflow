@@ -26,7 +26,10 @@ run on its own or as a full workflow with a single command.
 
 ## The Pipeline:
 
-* Auto-queries ENA for raw datafiles based on user-apecified accession in the configuration file-----OR-----
+* Auto-queries ENA for raw datafiles based on user-apecified accession in the configuration file
+
+  -----OR-----
+
   If after 3 automated attempts, the program is unsuccessful in retrieving from ENA, the user can download the desired paired-end reads
   from specified URLs, which are commented out unless needed in the configuration file. This design choice was explicitly implemented
   to safeguard against potentially unreliable ENA file extraction based on accession. When this method is chosen for raw data access,
