@@ -26,14 +26,14 @@ run on its own or as a full workflow with a single command.
 
 ## The Pipeline:
 
-* Auto-queries ENA for raw datafiles based on user-apecified accession in the configuration file
+* Auto-queries ENA for raw datafiles and md5 checksums based on user-apecified accession in the configuration file 
 
   -----OR-----
 
-  If after 3 automated attempts, the program is unsuccessful in retrieving from ENA, the user can download the desired paired-end reads
-  from specified URLs, which are commented out unless needed in the configuration file. This design choice was explicitly implemented
-  to safeguard against potentially unreliable ENA file extraction based on accession. When this method is chosen for raw data access,
-  MD5 checksums are also verified when provided.  
+  *Note:* If after 3 automated attempts, raw data files are not successfully retrieved from ENA portal, the user can elect to uncomment
+  the manual override in the configuration file and enter the specified URLs, which skips the ENA portal api lookup when both urls
+  present. This design choice was explicitly implemented to safeguard against possible down ENA api or a broken accession metadata
+  record. MD5 checksums are also verified when the URLs are directly provided in manual override.  
   
 * Runs baseline and post-processing FastQC for before/after read quality comparison
   
@@ -58,7 +58,7 @@ run on its own or as a full workflow with a single command.
 
 ## Supported Platforms: 
 
-MacOS and Linux. Windows users can run it through WSL. Docker support is planned as a future implementation
+MacOS and Linux. Windows users can run it through WSL. Docker support is planned as an upcoming implementation
 
 
 ## Execution Parameters:
@@ -67,7 +67,38 @@ All behavior is driven by `config/config.yaml`. The parameterized arguments are 
 
 * sample.accession -> Accession identifying the paired-end NGS run to be analyzed
 
-* 
+**MANUAL OVERRIDE PARAMETERS- COMMENT OUT IF USING AUTO-ENA API RETRIEVAL BY ACCESSION**
+
+* sample.fastq_url_r1 -> Manual override link for forward reads file
+
+* sample.fastq_url_r2 -> Manual override link for reverse reads file
+
+* sample.fastq_md5_r1 -> Manual override link for forward reads file md5 checksum
+
+* sample.fastq_md5_r2 -> Manual override link for reverse reads file md5 checksum
+  *Note:* Link for md5 checksums can be left as "" to omit during manual override
+
+* reference.name -> Naming convention for specified reference genome (somewhat arbitrary)
+
+* reference.url -> Link to reference genome file
+
+* trimming.adapter_type -> Targeted adapter name according to specifications of NGS run
+
+* trimming.adapter_url -> Link for targeted adapter file
+
+* decontamination.spike_ins -> Name of targeted spike-in contaminant (BBDuk built-in reference keyword)
+  *Note:* Other BBDuk keywords such as `lambda`, `adapters` and `artifacts` can be used depending on decontamination needs
+
+* variant_calling.ploidy -> The number of complete sets of chromosomes in the cell that was sequenced
+
+* variant_calling.min_base_quality ->
+
+
+
+
+
+
+## Parameter Specifications and Associated Details for Example Execution
 
 **Sequencing Run**
 
@@ -84,13 +115,11 @@ All behavior is driven by `config/config.yaml`. The parameterized arguments are 
   
 **Reference Genome**
 
-* Strain: *E. coli* O157:H7 str. EDL933
+* Strain: *E. coli* `O157:H7 str. EDL933`
 
 * RefSeq Assembly: `GCF_000006665.1` (ASM666v1)
   
 * Sequences: Chromosome `NC_002655.2` and Plasmid pO157 `NC_007414.1`
-  
-* Reference Name: `ecoli_o157h7_edl933` (label used for files in `resources/reference/`)
   
 * Reference URL: NCBI RefSeq genomic FASTA, gzip compressed
 
@@ -114,8 +143,7 @@ The value is passed to Snakemake as `--cores` and to every multithreaded tool (B
 **Spike-ins**
 
 * Decontamination Spike-Ins: `phix` (BBDuk built-in reference keyword)
-
-Other BBDuk keywords such as `lambda`, `adapters` and `artifacts` can be used depending on decontamination needs 
+  *Note:* Other BBDuk keywords such as `lambda`, `adapters` and `artifacts` can be used depending on decontamination needs 
 
 
 **Variant Calling**
