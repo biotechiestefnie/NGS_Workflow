@@ -91,9 +91,13 @@ All behavior is driven by `config/config.yaml`. The parameterized arguments are 
 
 * variant_calling.ploidy -> The number of complete sets of chromosomes in the cell that was sequenced
 
-* variant_calling.min_base_quality ->
+* variant_calling.min_base_quality -> Minimum base quality counted in the pileup
 
-
+* variant_calling.min_map_quality: Minimum mapping quality for a read to be used
+  
+* variant_calling.min_variant_quality: Hard filter on the QUAL field
+  
+* variant_calling.min_depth: Hard filter on read depth at a variant site
 
 
 
@@ -150,13 +154,13 @@ The value is passed to Snakemake as `--cores` and to every multithreaded tool (B
 
 * Variant Calling Ploidy: Haploid calling, bacteria have one copy of the chromosome
   
-* Variant Calling Minimum Base Quality: Minimum base quality counted in the pileup
+* Variant Calling Minimum Base Quality: 
   
-* Variant Calling Minimum Map Quality: Minimum mapping quality for a read to be used
+* Variant Calling Minimum Map Quality: 
   
-* Variant Calling Minimum Variant Quality: Hard filter on the QUAL field
+* Variant Calling Minimum Variant Quality:
   
-* Variant Calling Minimum Depth: Hard filter on read depth at a variant site
+* Variant Calling Minimum Depth: 
 
 
 **Fixed Tool Settings**
