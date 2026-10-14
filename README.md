@@ -224,6 +224,14 @@ threads:
 ```
 
 
+## Results From Example Run Using Accession SRR25083113 & Corresponding Reference Genome
+
+Upon executing the full workflow on the *E. coli* paired-end WGS run, the baseline FastQC files for both forward and reverse reads were essentially the same, with the exception that the reverse reads contained a wider margin of basepairs included in the first drop in quality seen at approximately halfway through the reads.
+
+<img width="900" height="554" alt="Screenshot 2026-10-13 at 9 54 56 PM" src="https://github.com/user-attachments/assets/f1c75fda-8de0-4d7c-8561-8c3c4d3745f9" />
+
+
+
 ## Stages of Execution
 
 The launcher is organized into stages and not individual Snakemake rules.
