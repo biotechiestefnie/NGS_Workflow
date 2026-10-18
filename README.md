@@ -1,6 +1,7 @@
 # NGS Workflow: Automated, Reproducible Paired-End Whole Genome Sequencing (WGS) Quality Control, Alignment, & Variant Calling
 
 author: Stefanie Moreno
+
 last updated: October 11, 2026
 
 ## Overview:
