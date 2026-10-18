@@ -2,21 +2,28 @@
 configfile: "config/config.yaml"
 
 # project configuration values shared across workflow rules
+# sequencing run param
 sample = config["sample"]["accession"]
+# reference genome param
 reference_name = config["reference"]["name"]
+# threads param for multi-thread tools
 num_threads = config["threads"]
+# trimming param
 adapter_type = config["trimming"]["adapter_type"]
+# decontamination param
 spike_ins = config["decontamination"]["spike_ins"]
+# variant calling params
 ploidy = config["variant_calling"]["ploidy"]
 min_base_quality = config["variant_calling"]["min_base_quality"]
 min_map_quality = config["variant_calling"]["min_map_quality"]
 min_variant_quality = config["variant_calling"]["min_variant_quality"]
 min_depth = config["variant_calling"]["min_depth"]
+min_allele_fraction = config["variant_calling"]["min_allele_fraction"]
 
-# shared reference path, declared once and reused by every rule
+# shared reference path, reused by every rule
 reference = f"resources/reference/{reference_name}.fa"
 
-# stage target set defining files that indicate each stage success
+# stage target set defining files indicating each stage success
 # aggregate target for quality-control workflow only
 rule qc:
     input:
@@ -28,7 +35,7 @@ rule align:
         f"results/deliverables/alignment_dashboard.html",
         f"results/deliverables/{sample}_stats.txt"
 
-# aggregate target for variant calling stage
+# aggregate target for variant calling stage only
 rule variant_calling:
     input:
         f"results/variants/{sample}_filtered.vcf.gz.tbi",
@@ -101,7 +108,7 @@ rule trim:
             > {log} 2>&1
         """
 
-# rule 3: remove spike_in contaminants
+# rule 3: remove spike_in contaminants from reads
 rule decon:
     input:
         r1=f"results/trimmed/{sample}_1_trimmed.fastq.gz",
@@ -128,7 +135,7 @@ rule decon:
             > {log} 2>&1
         """
 
-# rule 4: generate processed fastqc
+# rule 4: generate processed fastqc for comparison
 rule processed_fastqc:
     input:
         r1=f"results/processed/{sample}_1_decon.fastq.gz",
@@ -153,7 +160,7 @@ rule processed_fastqc:
             > {log} 2>&1
         """
 
-# rule 5-qc: aggregate preprocessing and quality-control metrics into stage dashboard
+# rule 5-qc: consolidate preprocessing and quality-control metrics into stage dashboard
 rule qc_dashboard:
     input:
         f"results/fastqc/baseline/{sample}_1_fastqc.zip",
@@ -194,20 +201,23 @@ rule bwa_align:
         f"logs/alignment_{sample}.log"
     threads:
         num_threads
+    resources:
+        mem_mb=4000  # realistic ceiling for bacterial genome
     shell:
         """
+        (
         bwa mem \
             -M \
             -R "{params.rg}" \
             -t {threads} \
             {input.ref} \
             {input.r1} \
-            {input.r2} \
-            2> {log} | \
+            {input.r2} | \
         samtools view \
             -@ {threads} \
-            -Sb - \
-            > {output.bam}
+            -b \
+            -o {output.bam} -
+        ) > {log} 2>&1
         """
 
 # rule 7: mark & remove pcr duplicates
@@ -304,7 +314,7 @@ rule alignment_dashboard:
 # rule 11-all: combine all results into unified dashboard
 rule multiqc_dashboard:
     input:
-        # takes results from qc & alignment stage to consolidate
+        # takes results from all stages to consolidate
         f"results/fastqc/baseline/{sample}_1_fastqc.zip",
         f"results/fastqc/baseline/{sample}_2_fastqc.zip",
         f"results/fastqc/postqc/{sample}_1_decon_fastqc.zip",
@@ -381,43 +391,35 @@ rule variant_call:
         ) > {log} 2>&1  
         """
 
-# rule 14: index raw vcf
-rule index_vcf:
+
+# rule 14: hard-filter variants by quality, depth, & allele fraction
+rule filter_variants:
     input:
         vcf=f"results/variants/{sample}_raw.vcf.gz"
     output:
-        tbi=f"results/variants/{sample}_raw.vcf.gz.tbi"
-    shell:
-        """
-        bcftools index --tbi {input.vcf}
-        """
-
-# rule 15: hard-filter variants by quality and depth
-rule filter_variants:
-    input:
-        vcf=f"results/variants/{sample}_raw.vcf.gz",
-        tbi=f"results/variants/{sample}_raw.vcf.gz.tbi"
-    output:
-        vcf=f"results/variants/{sample}_filtered.vcf.gz"
+        vcf=f"results/variants/{sample}_filtered.vcf.gz",
+        tbi=f"results/variants/{sample}_filtered.vcf.gz.tbi"
     params:
         min_qual=min_variant_quality,
-        min_dp=min_depth
+        min_dp=min_depth,
+        min_af=min_allele_fraction
     benchmark:
         f"benchmarks/filter_variants_{sample}.txt"
     log:
         f"logs/filter_variants_{sample}.log"
     shell:
         """
+        (
         bcftools filter \
-            --include 'QUAL>={params.min_qual} && FORMAT/DP>={params.min_dp}' \
+            --include 'QUAL>={params.min_qual} && FORMAT/DP>={params.min_dp} && FORMAT/AD[0:1]/FORMAT/DP>={params.min_af}' \
             --output-type z \
-            {input.vcf} \
-            > {output.vcf} \
-            2> {log} && \
+            --output {output.vcf} \
+            {input.vcf}
         bcftools index --tbi {output.vcf}
+        ) > {log} 2>&1
         """
 
-# rule 16: generate variant summary statistics
+# rule 15: generate variant summary statistics
 rule variant_stats:
     input:
         vcf=f"results/variants/{sample}_filtered.vcf.gz"
@@ -432,7 +434,7 @@ rule variant_stats:
             2> {log}
         """
 
-# rule 17-variants: aggregate variant statistics into stage dashboard
+# rule 16: aggregate variant statistics into stage dashboard
 rule variant_dashboard:
     input:
         f"results/variants/{sample}_variant_stats.txt"
