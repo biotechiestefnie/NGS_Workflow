@@ -103,7 +103,7 @@ fetch_ena_metadata() {
     local attempt=1
     local max_attempts=3
     local metadata
-    local url="https://www.ebi.ac.uk/ena/portal/api/filereport?accession=${accession}&result=read_run&fields=fastq_ftp,fastq_md5&format=tsv"
+    local url="https://www.ebi.ac.uk/ena/portal/api/filereport?accession=${accession}&result=read_run&fields=run_accession,fastq_ftp,fastq_md5&format=tsv"
 
     while [ "${attempt}" -le "${max_attempts}" ]; do
         if metadata=$(curl -fsSL "${url}" 2>/dev/null | tail -n 1); then
@@ -150,7 +150,7 @@ case "${config_output}" in
         echo "Valid Stages: ${valid_stages//,/, }"
         exit 1
         ;;
-        UNIMPLEMENTED:*)
+    UNIMPLEMENTED:*)
         bad_stage="${config_output#UNIMPLEMENTED:}"
         echo "Error: Stage '${bad_stage}' Is Not Yet Implemented in Snakefile."
         echo "Currently Available Stages: qc, align, variant-calling, all."
@@ -231,8 +231,9 @@ if [ "${need_reads}" = "1" ]; then
             exit 1
         fi
 
-        fastq_urls=$(echo "${read_metadata}" | cut -f1)
-        fastq_md5s=$(echo "${read_metadata}" | cut -f2)
+        # ena columns: 1 run_accession, 2 fastq_ftp, 3 fastq_md5
+        fastq_urls=$(echo "${read_metadata}" | cut -f2)
+        fastq_md5s=$(echo "${read_metadata}" | cut -f3)
         url_r1="https://$(echo "${fastq_urls}" | cut -d';' -f1)"
         url_r2="https://$(echo "${fastq_urls}" | cut -d';' -f2)"
         md5_r1=$(echo "${fastq_md5s}" | cut -d';' -f1)
