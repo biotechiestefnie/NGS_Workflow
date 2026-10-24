@@ -1,151 +1,278 @@
-# NGS Workflow: Automated, Reproducible Paired-End QC, Alignment & Variant Calling
+# NGS Workflow: Automated, Reproducible Paired-End Whole Genome Sequencing (WGS) Quality Control, Alignment, & Variant Calling
 
-**Author:** Stefanie Moreno
-**Last updated:** October 11, 2026
+author: Stefanie Moreno
 
-## Overview
+last updated: October 11, 2026
+
+## Overview:
 
 NGS Workflow is a stage-driven next-generation sequencing (NGS) pipeline for paired-end
 Illumina runs. It automates read retrieval, preprocessing, quality control, contaminant
 removal, alignment, duplicate removal, variant calling, and reporting. Every stage can be
 run on its own or as a full workflow with a single command.
 
-* **Bash:** orchestration, argument parsing, resource download, checksum verification, stage execution
-* **Python:** validation, configuration validation and stage resolution through a central stage registry
-* **Snakemake:** workflow engine, dependency tracking, rule execution, dry-run validation
-* **Conda / micromamba:** environment management, pinned tool versions
-* **pytest:** testing, unit tests covering every branch of stage resolution
 
-The pipeline:
+## Programming Components:
 
-* Downloads paired-end reads from user-specified URLs and verifies MD5 checksums when provided
-* Runs baseline and post-processing FastQC for before/after comparison
-* Trims adapters and low-quality bases (Trimmomatic) and removes spike-in contaminants (BBDuk)
-* Aligns cleaned reads to a reference genome (BWA-MEM) and removes PCR duplicates (samtools)
-* Calls haploid variants (bcftools) and applies hard filters on quality and depth
-* Produces one MultiQC dashboard per stage plus a unified dashboard for the full workflow
+* Bash: Orchestration, argument parsing, resource download, checksum verification, stage execution
+
+* Python: Validation, configuration validation and stage resolution through a central stage registry
+
+* Snakemake: Workflow engine, dependency tracking, rule execution, dry-run validation
+
+* Conda / Micromamba: Environment management, pinned tool versions
+
+* Pytest: Testing, unit tests covering every branch of stage resolution
+
+
+## The Pipeline:
+
+* Auto-queries ENA for raw datafiles and md5 checksums based on user-apecified accession in the configuration file 
+
+  -----OR-----
+
+  *Note:* If after 3 automated attempts, raw data files are not successfully retrieved from ENA portal, the user can elect to uncomment
+  the manual override in the configuration file and enter the specified URLs, which skips the ENA portal api lookup when both urls
+  present. This design choice was explicitly implemented to safeguard against possible down ENA api or a broken accession metadata
+  record. MD5 checksums are also verified when the URLs are directly provided in manual override.  
+  
+* Runs baseline and post-processing FastQC for before/after read quality comparison
+  
+* Trims adapters and low-quality bases with Trimmomatic
+
+* Removes spike-in contaminants with BBMac.BBDuk
+  
+* Aligns processed reads to the corresponding indexed reference genome with BWA-MEM
+
+* Removes PCR duplicates with samtools
+
+* Conducts overview and comprehensive alignment statistics with flagstat and samtools stats
+  
+* Calls haploid variants with bcftools, applying parameterized hard filters on quality and depth
+  
+* Produces one MultiQC dashboard per stage or a unified dashboard for the full workflow
+  
 * Skips any download or index that already exists, and reports total runtime on completion
-* Writes a log file and a benchmark file for every rule
+  
+* Writes log and benchmark files for every rule
+  
 
-**Supported platforms:** macOS and Linux. Windows users can run it through WSL. Docker
-support is planned.
+## Supported Operating Systems: 
 
-## Execution Parameters
+MacOS and Linux. Windows users can run it through WSL. Docker support is planned as an upcoming addition
 
-All behavior is driven by `config/config.yaml`. The values below are the example run
-included in this repository.
 
-### Sequencing run
+## Execution Parameters:
 
-* **Accession:** `SRR25083113`
-* **Organism:** *Escherichia coli* (ENA study: *E. coli* O157:H7 str. EDL933 genome sequencing and assembly)
-* **Platform:** Illumina HiSeq 2000
-* **Library layout:** Paired-end
-* **Source:** ENA FASTQ URLs set in `sample.fastq_url_r1` and `sample.fastq_url_r2`
+All parameterization behavior is driven by `config/config.yaml`. The arguments that the user can adjust are listed below:
 
-### Reference genome
+* `{sample.accession}` -> Accession identifying the NGS paired-end run to be analyzed
 
-* **Strain:** *E. coli* O157:H7 str. EDL933
-* **RefSeq assembly:** `GCF_000006665.1` (ASM666v1)
-* **Sequences:** chromosome `NC_002655.2` and plasmid pO157 `NC_007414.1`
-* **`reference.name`:** `ecoli_o157h7_edl933` (label used for files in `resources/reference/`)
-* **`reference.url`:** NCBI RefSeq genomic FASTA, gzip compressed
+**MANUAL OVERRIDE PARAMETERS- COMMENT OUT IF USING AUTO-ENA API RETRIEVAL BY ACCESSION**
 
-The reference is matched to the sample's strain. Aligning this run to the *E. coli* K-12
-reference instead gave a 75% mapped-read rate and tens of thousands of variant calls,
-while the EDL933 reference maps 97% of reads. Changing the strain means editing only the
-two `reference` values.
+* `{sample.fastq_url_r1}` -> Manual override link for forward reads file
 
-### Threads
+* `{sample.fastq_url_r2}` -> Manual override link for reverse reads file
 
-* **`threads`:** `10`
+* `{sample.fastq_md5_r1} -> Manual override link for forward reads file md5 checksum
 
-The value is passed to Snakemake as `--cores` and to every multithreaded tool (BWA,
-samtools, bcftools). Set it to the number of cores on your machine.
+* `{sample.fastq_md5_r2}` -> Manual override link for reverse reads file md5 checksum
+  *Note:* Link for md5 checksums can be left as "" to omit during manual override
 
-### Adapters
+* `{reference.name}` -> Naming convention for specified reference genome (somewhat arbitrary)
 
-* **`trimming.adapter_type`:** `TruSeq3-PE`
-* **`trimming.adapter_url`:** Trimmomatic adapter FASTA, downloaded to `resources/adapters/`
+* `{reference.url} -> Link to reference genome file
 
-### Spike-ins
+* `{trimming.adapter_type}` -> Targeted adapter name according to specifications of NGS run
+  
 
-* **`decontamination.spike_ins`:** `phix` (BBDuk built-in reference keyword)
+* ~{trimming.adapter_url}` -> Link for targeted adapter file
 
-Other BBDuk keywords such as `lambda`, `adapters` and `artifacts` can be used instead.
+* `{decontamination.spike_ins} -> Name of targeted spike-in contaminant (BBDuk built-in reference keyword)
+  *Note:* Other BBDuk keywords such as `lambda`, `adapters` and `artifacts` can be used depending on decontamination needs
 
-### Variant calling
+* `{variant_calling.ploidy}` -> The number of complete sets of chromosomes in the cell that was sequenced
 
-* **`variant_calling.ploidy`** = `1`: haploid calling, bacteria have one copy of the chromosome
-* **`variant_calling.min_base_quality`** = `20`: minimum base quality counted in the pileup
-* **`variant_calling.min_map_quality`** = `20`: minimum mapping quality for a read to be used
-* **`variant_calling.min_variant_quality`** = `30`: hard filter on the QUAL field
-* **`variant_calling.min_depth`** = `10`: hard filter on read depth at a variant site
+* `{variant_calling.min_base_quality}` -> Minimum base quality counted in the pileup
 
-### Fixed tool settings
+* `{variant_calling.min_map_quality} -> Minimum mapping quality for a read to be used
+  
+* `{variant_calling.min_variant_quality}`-> Hard filter on the QUAL field
+  
+* `{variant_calling.min_depth}`-> Hard filter on read depth at a variant site
+
+* `{threads}`: The value is passed to Snakemake as `--cores` and to every multithreaded tool (BWA, samtools, bcftools), and is set according to the capabilities of my operating system (Macbook M2Pro). The multiple threads of a given process may be executed in parallel (via multithreading capabilities), sharing resources such as memory. In particular, the threads of a process share its executable code and the values of its dynamically allocated variables and non-thread-local global variables at any given time. This results in significant enhancements in execution speed for the multithreaded tools. Customize to the number of available cores you intend to allocate on your machine.
+
+
+## Parameters Used as Inputs with Associated Details for Example Execution
+
+**Sequencing Run**
+
+* Accession: SRR25083113
+  
+* Organism: *Escherichia coli* (ENA study: *E. coli* O157:H7 str. EDL933 genome sequencing and assembly)
+
+* Platform: Illumina HiSeq 2000
+  
+* Library Layout: Paired-end
+  
+* Source: Automated ENA API extraction
+  *Note:* Automating extraction of the raw files by accession simplifies the data collection process for the user and minimizes the
+  parameters required for input, as well as the potential for entry errors or inability to locate desired datafiles.
+  
+**Reference Genome**
+
+* Strain: *Escherichia coli* O157:H7 str. EDL933
+
+* RefSeq Assembly: GCF_000006665.1 (ASM666v1)
+  
+* Sequences: Chromosome NC_002655.2 and Plasmid pO157 NC_007414.1
+  
+* Reference URL: g-zipped fasta file from NCBI RefSeq genomic FASTA link:
+  "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/006/665/GCF_000006665.1_ASM666v1/GCF_000006665.1_ASM666v1_genomic.fna.gz"
+  *Note:* The reference is matched to the sample's strain. Aligning this run to the *E. coli* K-12 reference instead gave a 75% mapped
+   read rate and tens of thousands of variant calls, while the EDL933 reference maps 97% of reads. Changing the strain means editing only
+   the two reference arguments.
+
+**Trimming**
+
+* Trimming Adapter Type: TruSeq3-PE
+  *Note:* TruSeq adapters are synthetic DNA sequences about 80 bases long that are attached to DNA or RNA fragments during Illumina NGS library preparation. They contain the mandatory P5 and P7 terminal sequences that anchor library molecules to the Illumina sequencing flow cell. TruSeq adapters also contain barcodes that incorporate 6 to 10bp index sequences (i7 and i5), allowing multiple samples to be pooled and sequenced together. Furthermore, they provide the required binding sites for sequencing and amplification primers, such as PCR Primer 1.0 and 2.0. Because E. coli has a relatively small genome (~4.6 Mb) and genomic runs usually yield high coverage with varying fragment sizes, adapter trimming is essential to prevent alignment failures. Using TruSeq3-PE or TruSeq3-PE-2 via Trimmomatic is the standard approach for trimming Illumina TruSeq adapters from paired-end data.
+   
+* Trimming Adapter Url: Trimmomatic adapter FASTA, downloaded to the resources folder from
+  https://raw.githubusercontent.com/usadellab/Trimmomatic/main/adapters/TruSeq3-PE.fa
+
+**Decontamination**
+
+* Spike-Ins: phix
+
+**Variant Calling**
+
+* variant_calling.ploidy: 1
+  *Note:* *E. coli* is a haploid bacterium with a single circular chromosome, and therefore, each position should carry one allele.
+  Setting ploidy to 1 stops the caller from modeling heterozygous genotypes (like 0/1), which would be biologically meaningless here and
+  would inflate false-positive calls from sequencing errors or mismapped reads.
+
+* variant_calling.min_base_quality: 20 (Phred)
+  *Note:* 20 Q20 means a 1% chance the base call is wrong. Filtering below this removes the noisiest bases (Illumina quality drops toward read ends) so they do not contribute to allele counts and trigger spurious SNPs.
+
+* variant_calling.min_map_quality: 20
+  *Note:* MAPQ 30 corresponds to roughly a 0.1% chance the read is misaligned. This discards ambiguous alignments, typically reads from
+  repeats (IS elements, rRNA operons, REP sequences) in the genome, which are a major source of false variants in bacterial data. 
+
+* variant_calling.min_variant_quality: 30
+  *NOTE:* This is the Phred-scaled confidence that a variant exists at the site at all, so Q30 keeps calls with about 99.9% confidence.
+  This is a common, conventional threshold that filters weak, marginal calls after the caller has pooled all the evidence.
+
+* min_depth: 10
+  *Note:* With a haploid genome, enough independent reads are needed to distinguish a real variant from random error and to trust that
+  the consensus allele is correct. About 10x is a widely used floor for bacterial isolates, and it is often applied alongside an allele
+  fraction cutoff (e.g., ≥ 80-90% of reads supporting the alt).
+
+**Threads**
+
+* Threads: 10 (Wit a high-end processor (like an 12-core CPU), assigning 10 threads means the OS can assign one thread to each individual
+  core. All 10 threads will execute instructions at the exact same physical instant. This is called parallelism, and it dramatically
+  speeds up the execution of the multi-threaded tools.)
+  
+
+**Fixed Tool Settings**
 
 These are set in the Snakefile and are not yet configurable.
 
-* **Trimmomatic:** `ILLUMINACLIP:<adapters>:2:30:10`, `LEADING:3`, `TRAILING:3`, `SLIDINGWINDOW:4:15`, `MINLEN:36`
-* **BBDuk:** `k=31`, `hdist=1`
-* **BWA-MEM:** `-M`, read group with `PL:illumina`
-* **Duplicate removal:** `samtools fixmate -m`, then `samtools markdup -r`
+* Trimmomatic: ILLUMINACLIP:<adapters>:2:30:10, LEADING:3, TRAILING:3, SLIDINGWINDOW:4:15, MINLEN:36
+  
+* BBDuk: k=31, hdist=1
+  
+* BWA-MEM: -M, read group with PL:illumina
+  
+* Duplicate Removal: samtools fixmate -m, then samtools markdup -r
+  
 
-### Example configuration
+### Argument Imput Locations Within the Configuration File
 
 ```yaml
+
 sample:
-  accession: "SRR25083113"
-  # manual read URLs, md5 checksums are optional and verified when provided
-  fastq_url_r1: "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR250/013/SRR25083113/SRR25083113_1.fastq.gz"
-  fastq_url_r2: "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR250/013/SRR25083113/SRR25083113_2.fastq.gz"
-  fastq_md5_r1: ""
-  fastq_md5_r2: ""
+  accession: 
+
+  # Manual Override: read URLs, md5 checksums are optional and verified when provided
+  # fastq_url_r1: 
+  # fastq_url_r2: 
+  # fastq_md5_r1: ""
+  # fastq_md5_r2: ""
 
 reference:
-  name: "ecoli_o157h7_edl933"
-  url: "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/006/665/GCF_000006665.1_ASM666v1/GCF_000006665.1_ASM666v1_genomic.fna.gz"
+  name: 
+  url: 
 
 trimming:
-  adapter_type: "TruSeq3-PE"
-  adapter_url: "https://raw.githubusercontent.com/usadellab/Trimmomatic/main/adapters/TruSeq3-PE.fa"
+  adapter_type: 
+  adapter_url:
 
 decontamination:
-  spike_ins: "phix"
+  spike_ins: 
 
 variant_calling:
-  ploidy: 1
-  min_base_quality: 20
-  min_map_quality: 20
-  min_variant_quality: 30
-  min_depth: 10
+  ploidy: 
+  min_base_quality: 
+  min_map_quality: 
+  min_variant_quality: 
+  min_depth: 
 
-threads: 10
+threads: 
+
 ```
 
-## Stages
 
-The launcher exposes stages and not individual Snakemake rules.
+## Results From Example Run Using Accession SRR25083113 & Corresponding Reference Genome
 
-* **`qc`**: baseline FastQC, trimming, decontamination, post-QC FastQC (reference required: no)
-* **`align`**: `qc` + BWA alignment, duplicate removal, BAM index, flagstat, alignment statistics (reference required: yes)
-* **`variant-calling`**: `align` + variant calling, filtering, VCF indexing, variant statistics (reference required: yes)
-* **`all`**: every implemented stage plus the unified MultiQC dashboard (reference required: yes)
+Upon executing the full workflow on the *E. coli* paired-end WGS run, the baseline FastQC "Per Base Sequence Quality" plots for both forward and reverse reads were essentially the same, with the exception that the reverse reads contained a wider margin of basepairs included in the first drop in quality seen at approximately halfway through the reads. The MultiQC file reports for the baseline analysis of the forward reads that 1.2M sequences are present, with 50% GC content and 11.2% duplicate reads. Below is an image of the "Per Base Sequence Quality" plot from the baseline FastQC file for the forward reads:
 
-Planned stages: `assembly`, `annotation`, `coverage`, `amr`, `taxonomy`.
+<img width="900" height="554" alt="Screenshot 2026-10-13 at 9 54 56 PM" src="https://github.com/user-attachments/assets/f1c75fda-8de0-4d7c-8561-8c3c4d3745f9" />
+
+After running the quality control stage, the FastQC "Per Base Sequence Quality" plots looked significantly better, with no remaining low quality bases at the start of the reads and no reads containing basepairs that dropped in quality below a 22 Phred score. Additionally, most of the yellow bars have disappeared, which means most or all reads have the same quality score. The yellow boxes are the interquartile ranges, and span from 25% to 75%, representing the middle 50% of Phred scores. As such, the yellow box needs variation to become established. If there is no variation, the 25th percentile, the median, and the 75th percentile are all identical. The MultiQC file reports that during trimming with Trimmomatic, 0.0% of reads were dropped from the file. This most likely means there were very few adapter sequences or low-quality regions to fix, so no reads fell below your minimum length threshold. Trimming only removes the bases at the ends of the reads, and we can see this clearly from the processed "Per Base Sequence Quality" plot, because the center dip in quality has not moved at all, and the quality at the beginning and end of each read are markedly better. After decontamination, the MultiQC reports that 11.1% of duplicates remain in the file, and there is still a 50% GC content, which is optimal. Below is an image of the "Per Base Sequence Quality" plot from the processed FastQC file for the forward reads for comparison:
+
+<img width="812" height="546" alt="Screenshot 2026-10-13 at 9 56 27 PM" src="https://github.com/user-attachments/assets/6ce168be-abca-4cff-b9aa-6ffc5cfb098b" />
+
+Once the reads are aligned, the MultiQC reports that 2.1M reads were mapped with a 0.37% error rate. This equates to a 97.3% mapping rate with 96.9% proper reads. 0.0% of mapped reads were non-primary. This informs us that the raw read file was of exceedingly high quality, making mapping an efficient process. After variant calling, we have 1177 variants, 971 single nucleotide polymorphisms (SNPs), 226 indels, and a 1.72 Ts / Tv. For a haploid organism like *E. coli*, these results are actually excellent and highly expected. In bacteria, indels are generally much rarer than SNPs because they frequently cause devastating frameshift mutations in dense, gene-rich genomes. A ratio of ~4.3:1 is a very healthy biological profile for a microbial/haploid call set. While a Ts/Tv of 1.72 is low for humans, it is entirely normal and expected for many haploid organisms. 1.72 is right in the biological sweet spot for a haploid organism, and the expected range for *E. coli* is 1.5 to 1.8. This means the variant calling was highly accurate, and the call set is clean, rather than containing false-positive noise.
+
+
+## Stages of Execution
+
+The launcher is organized into stages and not individual Snakemake rules.
+
+* Quality Control: Baseline FastQC, trimming, decontamination, post-processing FastQC (reference required: no)
+  
+* Alignment to Reference Genome: Quality control + BWA alignment, duplicate removal, BAM indexing of aligned reads, flagstat overview
+  alignment statistics, comprehensive alignment statistics (reference required: yes)
+  
+* Variant Calling: align plus variant calling, filtering, VCF indexing, variant statistics (reference required: yes)
+  
+* All: Every implemented stage plus the consolidated MultiQC dashboard (reference required: yes)
+
+* Future Stage Implementations: Assembly, Annotation, Coverage Analysis, Circos Visualization, Anti-Microbial Resistance (AMR) Profiling, Taxonomy, Gene Expression Profiling, Comparative Genoics.
+
+
+**Flow of Data Through Pipeline**
 
 ```text
-raw FASTQ -> baseline_fastqc -> trim -> decon -> processed_fastqc
-                                          |
-                                          v
-                  bwa_align -> dedup -> index_bam -> flagstat / stats
-                                          |
-                                          v
-        faidx_reference -> variant_call -> index_vcf -> filter_variants
-                                                              |
-                                                              v
-                                                variant_stats -> dashboards
+
+raw FASTQ.gz -> baseline_fastqc -> trim -> decon -> processed_fastqc -> quality control multiqc_dashboard
+                                             |
+                                             v
+                                          bwa align -> dedup -> index_bam -> flagstat / stats -> alignment multiqc_dashboard
+                                                                     |
+                                                                     v
+                                                                faidx_reference -> variant_call -> index_vcf -> filter_variants
+                                                                                                                      |
+                                                                                                                      v
+                                                                                                               variant_stats -> Full WF
+                                                                                                                                 --or--
+                                                                                                                                Variant
+                                                                                                                         multiqc_dashboard
 ```
+
 
 ## Running the Pipeline
 
@@ -165,10 +292,10 @@ bash scripts/run_pipeline.sh --stage all
 
 # list stages
 bash scripts/run_pipeline.sh --help
+
 ```
 
-Each run validates the configuration, downloads only what is missing, performs a Snakemake
-dry run to verify file setup and dependencies present, then executes the workflow.
+Fully automated from the Bash file, each execution run validates the configuration, downloads only parameter files that are missing, performs a Snakemake dry run to verify file setup and dependencies present, then initiates the workflow.
 
 ## Environment Setup
 
@@ -177,32 +304,40 @@ conda env create -f envs/env.yaml
 conda activate bioinfo
 ```
 
-The launcher checks that the `bioinfo` environment is active before running.
+The launcher checks that the bioinfo environment is active before running.
 
 ## Outputs
 
-* **`results/fastqc/`:** baseline and post-processing FastQC reports
-* **`results/alignment/`:** deduplicated BAM, BAM index, duplicate metrics, flagstat
-* **`results/variants/`:** raw and filtered VCFs with indexes, variant statistics
-* **`results/deliverables/`:** stage dashboards and statistics
-* **`logs/`:** one log per rule
-* **`benchmarks/`:** one runtime record per rule (see note below)
+* results/fastqc/: Baseline and post-processing FastQC reports
+  
+* results/alignment/: Deduplicated BAM, BAM index, duplicate metrics, flagstat
+  
+* results/variants/: Raw and filtered VCFs with indexes, variant statistics
+  
+* results/deliverables/: Stage dashboards and statistics
 
-Deliverables by stage:
+* logs/: One log per rule
+  
+* benchmarks/: One runtime record per rule.
+  *Note:* On macOS, Snakemake cannot collect CPU and memory statistics, so some benchmark files contain runtimes only from example
+   execution.
 
-```text
-qc -> qc_dashboard.html
-align -> alignment_dashboard.html, <sample>_stats.txt
-variant-calling -> variant_dashboard.html
-all -> multiqc_dashboard.html, <sample>_stats.txt
-```
 
-On macOS, Snakemake cannot collect CPU and memory statistics, so some benchmark files
-contain runtimes only.
+**Deliverables By Stage:**
+
+* Quality Control -> `qc_dashboard.html`
+
+* Alignment -> `alignment_dashboard.html`, `<sample>_stats.txt`
+
+* Variant Calling -> `variant_dashboard.html`
+
+* All -> `multiqc_dashboard.html`, `<sample>_stats.txt`
+
 
 ## Directory Structure
 
 ```text
+
 NGS_Workflow/
 ├── config/
 │   └── config.yaml
@@ -228,48 +363,69 @@ NGS_Workflow/
 ├── benchmarks/
 ├── pyproject.toml
 └── Snakefile
+
 ```
 
 ## Design
 
-**Separation of concerns.** The Bash launcher handles environment checks, downloads and
-checksums. The Python stage registry validates the stage and configuration and returns
-shell-safe variables. Snakemake handles the bioinformatics workflow. Each part can be tested 
-and changed on its own.
+* Separation of Concerns: The Bash launcher handles environment checks, downloads and checksums. It also initiates the dry-run and upon successful completion, executes the specified workflow. The Python stage registry validates the stage and configuration and returns shell-safe variables. Snakemake handles the bioinformatics workflow. Each part can be tested and changed on its own.
 
-**Validation before execution.** Unknown stages, unimplemented stages, missing parameters
-and unreadable YAML are caught by the registry before Snakemake starts, with a clear error
-message and no stack trace.
+* Validation Before Execution: Unknown stages, unimplemented stages, missing parameters and unreadable YAML are caught by the registry before Snakemake starts, with a clear error message and no stack trace.
 
-**Reproducibility.** Inputs, reference, adapters, contaminants and thresholds all live in
-one configuration file. The reference genome is a tracked Snakemake input, so changing it
-re-runs alignment and every downstream step instead of reusing stale results.
+* Reproducibility: Run accession, reference, adapters, contaminants, variant thresholds, and OS specifications all live in one configuration file for easy replacement of arguments to analyze a different run. The reference genome is a tracked Snakemake input, so changing it re-runs alignment and every downstream step instead of reusing stale results.
 
-**Extensibility.** A new stage needs one entry in the stage registry and its Snakemake
-rules.
+* Extensibility: All future stages need only one entry in the stage registry and its Snakemake rule(s), along with configuration for any
+  parameters
+
 
 ## Testing
+
+Execution Call:
 
 ```bash
 python -m pytest -v
 ```
+The tests cover stage validation, parameter validation, unknown and unimplemented stages, invalid YAML, resource resolution, the variant-calling stage, and shell-safe quoting.
 
-The tests cover stage validation, parameter validation, unknown and unimplemented stages,
-invalid YAML, resource resolution, the variant-calling stage, and shell-safe quoting.
 
 ## Troubleshooting
 
-* **Environment error:** `conda activate bioinfo`
-* **`MISSING:` error:** add the named parameter to `config/config.yaml`
-* **`UNKNOWN_STAGE` error:** run the script with `--help` for valid stages
-* **Download keeps failing:** check the URL and your connection, downloads retry three times
-* **Checksum mismatch:** delete `raw/*.fastq.gz` and rerun
-* **Workflow problems:** run `snakemake -n <target>` to inspect the dependency graph
+* Environment Error: `conda activate bioinfo`
+ 
+* `MISSING:` Error: Add the named parameter to config/config.yaml
+  
+* `UNKNOWN_STAGE` error: Run the script with `--help` for valid stages
+* 
+* Automated Download by Accession Keeps Failing:
+  
+  1. Check the accession and your connection, downloads auto-retry three times
+   
+  2. Check terminal to review details
+     
+  3. If still failing, uncomment the Manual Override urls in the configuration file under sample and input the direct links to your files
+     of interest. Example execution links are included to demonstrate input requirements. M5 checksums can be input along with the direct
+     links, or they can be left as is with "" to skip checks
+     
+* Checksum Mismatch: Delete raw fastq files and attempt rerun- may contain residual files
+  
+* Workflow Problems: Run `snakemake -n <target>` to inspect the dependency graph. If unable to identify problem, please contact author on
+  GitHub asap.
 
-## Roadmap
+
+## Future Additions
 
 * Docker image for fully portable execution
-* Assembly (SPAdes), annotation (Prokka or Bakta), coverage analysis (mosdepth)
-* AMR detection (AMRFinderPlus), taxonomic classification (Kraken2)
-* Minimum allele-fraction filter for variant calls
+  
+* Assembly (SPAdes)
+
+* Annotation (Prokka or Bakta)
+
+* Coverage Analysis (mosdepth)
+
+* Circos Visualization (pyCirclize)
+  
+* Anti-Microbial Resistance Profiling (AMRFinderPlus)
+
+* Taxonomic Classification (Kraken2)
+
 * Per-stage tool requirement checks in place of the environment-name check

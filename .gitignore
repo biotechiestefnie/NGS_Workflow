@@ -10,8 +10,8 @@ __pycache__/
 .snakemake/
 
 # large data and intermediate outputs, regenerate by running pipeline
-raw/
-resources/
+data/raw/
+data/resources/
 logs/
 benchmarks/
 results/alignment/

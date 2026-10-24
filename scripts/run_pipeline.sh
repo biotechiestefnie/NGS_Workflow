@@ -96,7 +96,7 @@ download_with_retry() {
     return 1
 }
 
-# retrieve read download locations and checksum metadata from ena. retries api failures
+# retrieve read download locations and checksum metadata from ena- retries api failures
 # instead of terminating workflow d/t temp service issues
 fetch_ena_metadata() {
     local accession="$1"
@@ -119,7 +119,7 @@ fetch_ena_metadata() {
     return 1
 }
 
-# validate download integrity against md5 checksum. prevents corrupted or incomplete
+# validate download integrity against md5 checksum- prevents corrupted or incomplete
 # files from entering workflow
 verify_checksum() {
     local file="$1"

@@ -186,3 +186,4 @@ def test_variant_calling_stage_requires_variant_params(write_config):
     assert len(lines) == 1
     assert lines[0].startswith("MISSING:")
     assert "variant_calling.ploidy" in lines[0]
+    
