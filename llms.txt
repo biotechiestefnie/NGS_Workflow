@@ -1,0 +1,45 @@
+# NGS_Workflow Architecture Manual
+
+This repository contains a generalized, production-grade Snakemake workflow designed for paired-end genomic runs (validated on E. coli datasets).
+
+## Directory Layout Mapping
+- `Snakefile`: The primary execution graph routing all analysis steps.
+- `config/`: Parameterization blueprints for tool arguments and environment paths.
+- `scripts/`: Local automation routines and environment stage registries.
+- `data/` (EXCLUDED): Placeholder path for user datasets. Expects raw paired-end fastq reads in `data/raw/` and genome templates in `data/resources/`.
+
+## Workflow Pipeline Stages
+1. Quality Control & Alignment (Active)
+2. Variant Calling & Filtering (Active)
+3. Downstream Roadmap (In Development)
+   - Taxonomic Classification (Kraken2 integration)
+   - Variant Annotation (SnpEff mapping)
+   - Antimicrobial Susceptibility / AMR Detection
+
+##  Declarative Pre-Flight Execution Graph (The Auto Dry-Run)
+The pipeline utilizes an autonomous, compile-time dry-run mechanism baked directly into the top-level orchestration layer:
+* **Top-Level Variable Binding:** Configuration tokens (`config["sample"]["accession"]`, `config["reference"]["name"]`) and tools parameters are read instantly by the Snakemake compiler before launching any compute operations.
+* **Proactive Syntax Enforcement:** By declaring target paths dynamically (such as building rules on `f"resources/reference/{reference_name}.fa"`), the pipeline forces an immediate dry-run verification. If an expression or input dependency file is missing or corrupted, Snakemake terminates immediately, protecting processing nodes from firing empty or broken threads.
+
+##  Validation Routines, Failsafes, and ENA Accession Fallback Logic
+
+The `scripts/run_pipeline.sh` launcher implements a strict, defensive pre-execution layer that enforces full pipeline integrity before invoking any Snakemake computation graphs.
+
+### 1. Centralized Pre-Flight Validation Matrix
+* **Environment Safeguard:** The runtime checks for active environment parameters, failing closed immediately if the required `bioinfo` Conda environment is missing (`set -euo pipefail`).
+* **The Registry Gatekeeper:** The configuration YAML passes through a centralized abstraction layer (`scripts/stage_registry.py`) before execution. It catches syntactic anomalies (`INVALID`), parameter omissions (`MISSING`), and unconfigured pipelines (`UNIMPLEMENTED`), completely isolating errors before touching production infrastructure.
+
+### 2. Dual-Path Read Retrieval & ENA API Fallback
+* **Automated Retrieval Path:** By default, the pipeline autonomously queries the EBI ENA API via structured TSV report endpoints to fetch run accessions, remote URLs, and expected MD5 checksum configurations.
+* **Manual Override Path:** If transient network interruptions or upstream API failures exhaust the system's 3-try retry constraint (`download_with_retry`), the system fails gracefully. Developers can uncomment the manual hardcoded blocks in `config/config.yaml` to specify direct sequence mirrors and expected MD5 keys.
+
+### 3. State-Aware Skip Logic (Time & Resource Protection)
+To maximize local compute efficiency and eliminate redundant network or memory overhead, the orchestration layer evaluates local file states before firing triggers:
+* **FASTQ Read Skip:** If compressed FASTQ sequences already reside within `data/raw/`, the network download step is entirely bypassed. If raw text strings are detected, the system compresses them in-place via local background routines instead of re-downloading.
+* **Reference Genome Skip:** If the required reference fasta and structural index arrays are detected locally, downloading and indexing tasks are completely omitted.
+
+### 4. Integrity and Stale Reference Verification
+To prevent data contamination or silent mismatches when toggling between alternate sequencing runs:
+* **Adaptive Cross-OS Checksums:** The launcher leverages polymorphic hash calculations, automatically shifting formatting parameters between Linux (`md5sum`) and macOS (`md5`) architectures.
+* **Stale Reference Verification:** Prior to sequence mapping, the pipeline checks the explicit dataset parameter strings embedded in the active configuration metadata against the checksum profile of the local files. If a file exists but maps to a mismatched dataset signature from an older run, the system flags the file as stale, invalidates the local buffer, and enforces a clean download of the correct target asset.
+EOF

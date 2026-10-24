@@ -1,0 +1,11 @@
+# Ignore raw sequence data and reference templates
+data/raw/
+data/resources/
+
+# Ignore step-by-step performance metrics and telemetry
+benchmarks/
+
+# Ignore active pipeline outputs and state files
+results/
+.snakemake/
+logs/
